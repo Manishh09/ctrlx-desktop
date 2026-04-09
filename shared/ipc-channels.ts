@@ -20,6 +20,7 @@ export const IPC_CHANNELS = {
     RELOAD: 'external:reload',
     NAVIGATE_BACK: 'external:navigate-back',
     SET_BOUNDS: 'external:set-bounds',
+    DETACH: 'external:detach',
     READY: 'external:ready',
     DID_NAVIGATE: 'external:did-navigate',
     DID_FAIL_LOAD: 'external:did-fail-load',

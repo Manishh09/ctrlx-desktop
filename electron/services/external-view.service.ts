@@ -67,6 +67,8 @@ export class ExternalViewService {
       });
 
       this.externalView.webContents.on('did-fail-load', (_event, errorCode, errorDesc) => {
+        // Detach so Angular error overlay is not obscured by the native view
+        this.detach();
         if (!this.shellView.webContents.isDestroyed()) {
           this.shellView.webContents.send(IPC_CHANNELS.EXTERNAL.DID_FAIL_LOAD, {
             errorCode,
@@ -77,12 +79,23 @@ export class ExternalViewService {
 
       this.externalView.setBackgroundColor('#1a1a2e');
 
+      // Fallback: emit READY on did-finish-load so non-cooperative apps
+      // (e.g. Node-RED that won't call ctrlxBridge.notifyReady()) still
+      // transition out of the loading state.
+      this.externalView.webContents.once('did-finish-load', () => {
+        if (!this.shellView.webContents.isDestroyed()) {
+          this.shellView.webContents.send(IPC_CHANNELS.EXTERNAL.READY);
+        }
+      });
+
       this.currentUrl = url;
       await this.externalView.webContents.loadURL(url);
 
       return { success: true };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
+      // Detach so Angular overlays are visible on failure
+      this.detach();
       return { success: false, error: message };
     }
   }

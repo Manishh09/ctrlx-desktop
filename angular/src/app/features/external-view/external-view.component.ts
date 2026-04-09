@@ -6,6 +6,8 @@ import {
   OnDestroy,
   AfterViewInit,
   signal,
+  input,
+  effect,
 } from '@angular/core';
 import { ElectronIpcService } from '../../core/services/electron-ipc.service';
 
@@ -210,10 +212,28 @@ export class ExternalViewComponent implements OnInit, AfterViewInit, OnDestroy {
   private resizeObserver: ResizeObserver | null = null;
   private animFrameId: number | null = null;
   private windowResizeHandler: (() => void) | null = null;
+  private slot: HTMLElement | null = null;
+  private viewInitialized = signal(false);
+
+  /** Passed by the parent tab container — true when this tab is visible. */
+  active = input<boolean>(false);
 
   status = this.ipc.externalAppStatus;
   loadError = this.ipc.externalLoadError;
   externalUrl = signal('http://localhost:1880');
+
+  constructor() {
+    // React to tab visibility changes after the view is ready.
+    effect(() => {
+      if (!this.viewInitialized()) return;
+      if (this.active()) {
+        this.startBoundsTracking();
+      } else {
+        this.stopBoundsTracking();
+        if (this.ipc.isElectron) this.ipc.detachExternal();
+      }
+    });
+  }
 
   ngOnInit(): void {
     if (this.ipc.isElectron) {
@@ -226,17 +246,19 @@ export class ExternalViewComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
-    this.setupBoundsTracking();
+    this.slot = this.elementRef.nativeElement.querySelector('.view-slot') as HTMLElement;
+    // Signal readiness — effect() will fire and start tracking if already active.
+    this.viewInitialized.set(true);
   }
 
-  private setupBoundsTracking(): void {
-    if (!this.ipc.isElectron) return;
+  private startBoundsTracking(): void {
+    if (!this.ipc.isElectron || !this.slot) return;
 
-    const slot = this.elementRef.nativeElement.querySelector('.view-slot') as HTMLElement;
-    if (!slot) return;
+    // Tear down any stale observer before re-creating.
+    this.stopBoundsTracking();
 
     const updateBounds = (): void => {
-      const rect = slot.getBoundingClientRect();
+      const rect = this.slot!.getBoundingClientRect();
       const bounds = {
         x: Math.round(rect.x),
         y: Math.round(rect.y),
@@ -252,13 +274,27 @@ export class ExternalViewComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
       this.animFrameId = requestAnimationFrame(updateBounds);
     });
-    this.resizeObserver.observe(slot);
+    this.resizeObserver.observe(this.slot);
 
     this.windowResizeHandler = updateBounds;
     window.addEventListener('resize', this.windowResizeHandler);
 
-    // Initial bounds after layout settles
-    setTimeout(updateBounds, 100);
+    // Snap bounds immediately so the native view appears without waiting
+    // for the first ResizeObserver callback.
+    requestAnimationFrame(updateBounds);
+  }
+
+  private stopBoundsTracking(): void {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+    if (this.animFrameId) {
+      cancelAnimationFrame(this.animFrameId);
+      this.animFrameId = null;
+    }
+    if (this.windowResizeHandler) {
+      window.removeEventListener('resize', this.windowResizeHandler);
+      this.windowResizeHandler = null;
+    }
   }
 
   async loadExternalApp(): Promise<void> {
@@ -277,10 +313,8 @@ export class ExternalViewComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.resizeObserver?.disconnect();
-    if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
-    if (this.windowResizeHandler) {
-      window.removeEventListener('resize', this.windowResizeHandler);
-    }
+    this.stopBoundsTracking();
+    // Always detach the native view when this component is torn down.
+    if (this.ipc.isElectron) this.ipc.detachExternal();
   }
 }

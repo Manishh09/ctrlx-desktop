@@ -57,6 +57,9 @@ export class ElectronIpcService implements OnDestroy {
       this.zone.run(() => {
         this._externalAppStatus.set('error');
         this._externalLoadError.set(error.errorDescription);
+        // Clear the external view so Angular overlays are not obscured
+        this.api.external.destroy();
+        this._externalAppUrl.set('');
       });
     });
     this.cleanupFns.push(unsub3);
@@ -93,6 +96,11 @@ export class ElectronIpcService implements OnDestroy {
   reloadExternal(): void {
     if (!this.isElectron) return;
     this.api.external.reload();
+  }
+
+  detachExternal(): void {
+    if (!this.isElectron) return;
+    this.api.external.detach();
   }
 
   destroyExternal(): void {

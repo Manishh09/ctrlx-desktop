@@ -9,6 +9,7 @@ interface ElectronExternalAPI {
   loadUrl(url: string): Promise<{ success: boolean; error?: string }>;
   setBounds(bounds: { x: number; y: number; width: number; height: number }): Promise<void>;
   reload(): void;
+  detach(): void;
   destroy(): void;
   onNavigated(cb: (url: string) => void): () => void;
   onLoadFailed(cb: (error: { errorCode: number; errorDescription: string }) => void): () => void;

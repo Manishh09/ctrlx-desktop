@@ -11,7 +11,7 @@ import { TitleCasePipe } from '@angular/common';
     <div class="sidebar-container">
       <div class="sidebar-header">
         <h3 class="title">Properties</h3>
-        <button class="toggle-btn" (click)="togglePanel.emit()">&#x2715;</button>
+        <!-- <button class="toggle-btn" (click)="togglePanel.emit()">&#x2715;</button> -->
       </div>
 
       <div class="panel-content">

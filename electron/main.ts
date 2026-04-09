@@ -125,6 +125,10 @@ function setupExternalViewIPC(): void {
     externalViewService?.reload();
   });
 
+  ipcMain.on(IPC_CHANNELS.EXTERNAL.DETACH, () => {
+    externalViewService?.detach();
+  });
+
   ipcMain.on(IPC_CHANNELS.EXTERNAL.DESTROY, () => {
     externalViewService?.destroy();
   });

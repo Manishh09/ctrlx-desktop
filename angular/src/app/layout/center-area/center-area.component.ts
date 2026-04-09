@@ -28,14 +28,14 @@ interface Tab {
       </div>
 
       <div class="tab-content">
-        @switch (activeTab()) {
-          @case ('dashboard') {
-            <app-dashboard />
-          }
-          @case ('ctrlx-flow') {
-            <app-external-view />
-          }
-        }
+        <!-- Both panels stay mounted so WebContentsView lifecycle is fully
+             controlled via the [active] input, not Angular's destroy cycle. -->
+        <div class="tab-panel" [class.hidden]="activeTab() !== 'dashboard'">
+          <app-dashboard />
+        </div>
+        <div class="tab-panel" [class.hidden]="activeTab() !== 'ctrlx-flow'">
+          <app-external-view [active]="activeTab() === 'ctrlx-flow'" />
+        </div>
       </div>
     </div>
   `,
@@ -51,7 +51,7 @@ interface Tab {
 
     .tab-bar {
       display: flex;
-      background: var(--bg-sidebar);
+      background: var(--bg-chrome);
       border-bottom: 1px solid var(--border-color);
       padding: 0 8px;
       flex-shrink: 0;
@@ -77,9 +77,17 @@ interface Tab {
     .tab.active {
       color: var(--text-primary);
       border-bottom-color: var(--accent-color);
+      background: var(--bg-active);
     }
 
     .tab-icon { font-size: 14px; }
+
+    .tab-panel {
+      height: 100%;
+    }
+    .hidden {
+      display: none;
+    }
 
     .tab-content {
       flex: 1;

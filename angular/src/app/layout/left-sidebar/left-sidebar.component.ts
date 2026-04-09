@@ -128,8 +128,9 @@ interface NavItem {
       color: var(--text-primary);
     }
     .nav-item.active {
-      background: var(--accent-color);
-      color: #fff;
+      background: var(--bg-active);
+      // color: var(--accent-color);
+      //box-shadow: inset 3px 0 0 var(--accent-color);
     }
 
     .nav-icon { font-size: 16px; width: 20px; text-align: center; }

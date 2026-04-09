@@ -15,6 +15,7 @@ import type {
 const ALLOWED_SEND_CHANNELS = new Set<string>([
   IPC_CHANNELS.SHELL.READY,
   IPC_CHANNELS.EXTERNAL.RELOAD,
+  IPC_CHANNELS.EXTERNAL.DETACH,
   IPC_CHANNELS.EXTERNAL.DESTROY,
   IPC_CHANNELS.BRIDGE.TO_EXTERNAL,
   IPC_CHANNELS.WINDOW.MINIMIZE,
@@ -80,6 +81,9 @@ const electronAPI = {
     },
     reload(): void {
       ipcRenderer.send(IPC_CHANNELS.EXTERNAL.RELOAD);
+    },
+    detach(): void {
+      ipcRenderer.send(IPC_CHANNELS.EXTERNAL.DETACH);
     },
     destroy(): void {
       ipcRenderer.send(IPC_CHANNELS.EXTERNAL.DESTROY);

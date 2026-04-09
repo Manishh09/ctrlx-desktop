@@ -21,7 +21,7 @@ import { CenterAreaComponent } from '../center-area/center-area.component';
 
       <app-center-area class="center-area" />
 
-      @if (showRightSidebar()) {
+      @if (true) { <!-- showRightSidebar() --- IGNORE --- -->
         <div
           class="divider"
           (mousedown)="startResizeRight($event)"
@@ -30,8 +30,10 @@ import { CenterAreaComponent } from '../center-area/center-area.component';
         <app-right-sidebar
           class="right-sidebar"
           [style.width.px]="rightSidebarWidth()"
-          (togglePanel)="showRightSidebar.set(false)"
+         
         />
+        <!-- removed from above -->
+         <!-- (togglePanel)="showRightSidebar.set(false)" -->
       }
     </div>
   `,
@@ -41,7 +43,7 @@ import { CenterAreaComponent } from '../center-area/center-area.component';
     .shell {
       display: flex;
       height: 100%;
-      background: var(--bg-primary);
+      background: var(--bg-chrome);
       color: var(--text-primary);
     }
 

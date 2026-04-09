@@ -60,6 +60,27 @@ import { TitleCasePipe } from '@angular/common';
           </div>
         </div>
 
+        <!-- Comm Log -->
+        <div class="section">
+          <h4 class="section-title">Comm log</h4>
+          @if (commLog().length === 0) {
+            <p class="empty-text">No messages yet…</p>
+          } @else {
+            <div class="comm-log">
+              @for (entry of commLog(); track $index) {
+                <div class="log-entry" [class.log-in]="entry.direction === 'in'" [class.log-out]="entry.direction === 'out'">
+                  <div class="log-header">
+                    <span class="log-dir">{{ entry.direction === 'in' ? '⬇ IN' : '⬆ OUT' }}</span>
+                    <span class="log-type">{{ entry.type }}</span>
+                    <span class="log-time">{{ entry.time }}</span>
+                  </div>
+                  <div class="log-summary">{{ entry.summary }}</div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+
         <!-- Quick Actions -->
         <div class="section">
           <h4 class="section-title">Developer</h4>
@@ -218,7 +239,73 @@ import { TitleCasePipe } from '@angular/common';
       background: var(--bg-hover);
       color: var(--text-secondary);
     }
+
+    .comm-log {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+
+    .log-entry {
+      padding: 5px 8px;
+      border-radius: var(--radius-sm);
+      border-left: 3px solid transparent;
+      font-size: 11px;
+    }
+
+    .log-in {
+      background: rgba(65, 180, 150, 0.08);
+      border-left-color: var(--status-success);
+    }
+
+    .log-out {
+      background: rgba(0, 144, 208, 0.08);
+      border-left-color: var(--accent-color);
+    }
+
+    .log-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 2px;
+    }
+
+    .log-dir {
+      font-weight: 700;
+      font-size: 10px;
+      color: var(--text-muted);
+      min-width: 32px;
+    }
+
+    .log-in .log-dir { color: var(--status-success); }
+    .log-out .log-dir { color: var(--accent-color); }
+
+    .log-type {
+      flex: 1;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      color: var(--text-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .log-time {
+      color: var(--text-muted);
+      font-size: 10px;
+      white-space: nowrap;
+    }
+
+    .log-summary {
+      color: var(--text-muted);
+      font-size: 11px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   `],
+
 })
 export class RightSidebarComponent {
   private externalApp = inject(ExternalAppService);
@@ -227,6 +314,7 @@ export class RightSidebarComponent {
   togglePanel = output();
 
   selectedNodes = this.externalApp.selectedNodes;
+  commLog = this.externalApp.commLog;
   externalStatus = this.ipc.externalAppStatus;
   externalUrl = this.ipc.externalAppUrl;
   loadError = this.ipc.externalLoadError;

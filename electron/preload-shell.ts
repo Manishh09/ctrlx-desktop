@@ -107,10 +107,14 @@ const electronAPI = {
 
   bridge: {
     sendToExternal(message: BridgeMessage): void {
+      console.log(`[SHELL][3] preload-shell: sending to external via IPC | type: "${message.type}" | correlationId: ${message.correlationId ?? 'none'}`);
       ipcRenderer.send(IPC_CHANNELS.BRIDGE.TO_EXTERNAL, message);
     },
     onMessageFromExternal(cb: (message: BridgeMessage) => void): () => void {
-      const handler = (_e: IpcRendererEvent, msg: BridgeMessage) => cb(msg);
+      const handler = (_e: IpcRendererEvent, msg: BridgeMessage) => {
+        console.log(`[SHELL][7] preload-shell: received from external via IPC | type: "${msg.type}" | source: ${msg.source}`);
+        cb(msg);
+      };
       ipcRenderer.on(IPC_CHANNELS.BRIDGE.FROM_EXTERNAL, handler);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.BRIDGE.FROM_EXTERNAL, handler);
     },

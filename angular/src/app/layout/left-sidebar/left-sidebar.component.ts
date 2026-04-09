@@ -28,7 +28,7 @@ interface NavItem {
           <button
             class="nav-item"
             [class.active]="activeItem() === item.id"
-            (click)="activeItem.set(item.id)"
+            (click)="onNavItemClick(item.id)"
           >
             <span class="nav-icon">{{ item.icon }}</span>
             <span class="nav-label">{{ item.label }}</span>
@@ -49,6 +49,9 @@ interface NavItem {
         </button>
         <button class="action-btn" (click)="reloadExternal()">
           <span class="action-icon">&#x21BB;</span> Reload External
+        </button>
+        <button class="action-btn" (click)="sendDemoToExternal()">
+          <span class="action-icon">&#x2197;</span> Send Demo &#x2192; External
         </button>
       </div>
 
@@ -217,6 +220,18 @@ export class LeftSidebarComponent {
 
   activeItem = signal('flows');
   flowStatus = this.externalApp.flowStatus;
+
+  onNavItemClick(id: string): void {
+    this.activeItem.set(id);
+    console.log(`[SHELL][1] LeftSidebar: ACTION → nav item clicked | id: "${id}" → sending host:nav-changed to external`);
+    this.ipc.sendToExternal('host:nav-changed', { section: id, timestamp: Date.now() });
+  }
+
+  sendDemoToExternal(): void {
+    const payload = { message: 'Hello from Angular host!', ts: Date.now() };
+    console.log('[SHELL][1] LeftSidebar: ACTION → sendDemoToExternal | payload:', payload);
+    this.ipc.sendToExternal('host:demo-ping', payload);
+  }
 
   navItems: NavItem[] = [
     { icon: '\u2B21', label: 'Flows', id: 'flows' },

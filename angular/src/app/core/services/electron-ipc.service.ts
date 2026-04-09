@@ -49,6 +49,7 @@ export class ElectronIpcService implements OnDestroy {
         const pending = this.pendingRequests.get(message.replyTo)!;
         clearTimeout(pending.timer);
         this.pendingRequests.delete(message.replyTo);
+        console.log(`[SHELL][8] ElectronIpcService: received REPLY from external | replyTo: ${message.replyTo} | isError: ${message.isError ?? false}`);
         if (message.isError) {
           pending.reject(new Error(String(message.payload)));
         } else {
@@ -56,11 +57,13 @@ export class ElectronIpcService implements OnDestroy {
         }
         return;
       }
+      console.log(`[SHELL][8] ElectronIpcService: received message from EXTERNAL → dispatching to app | type: "${message.type}"`);
       this._lastExternalMessage.set(message);
     });
     this.cleanupFns.push(unsub1);
 
     const unsub2 = this.api.external.onNavigated((url) => {
+      console.log('[SHELL][8] ElectronIpcService: external app did-navigate → status = ready | url:', url);
       this._externalAppUrl.set(url);
       this._externalAppStatus.set('ready');
       this._externalLoadError.set(null);
@@ -68,6 +71,7 @@ export class ElectronIpcService implements OnDestroy {
     this.cleanupFns.push(unsub2);
 
     const unsub3 = this.api.external.onLoadFailed((error) => {
+      console.log('[SHELL][8] ElectronIpcService: external app load FAILED → status = error | desc:', error.errorDescription);
       this._externalAppStatus.set('error');
       this._externalLoadError.set(error.errorDescription);
       // Clear the external view so Angular overlays are not obscured
@@ -77,6 +81,7 @@ export class ElectronIpcService implements OnDestroy {
     this.cleanupFns.push(unsub3);
 
     const unsub4 = this.api.external.onReady(() => {
+      console.log('[SHELL][8] ElectronIpcService: external app signals READY → status = ready');
       this._externalAppStatus.set('ready');
     });
     this.cleanupFns.push(unsub4);
@@ -130,6 +135,7 @@ export class ElectronIpcService implements OnDestroy {
       source: 'shell',
       correlationId: crypto.randomUUID(),
     };
+    console.log(`[SHELL][2] ElectronIpcService: sendToExternal | type: "${type}" | correlationId: ${message.correlationId}`);
     this.api.bridge.sendToExternal(message);
   }
 
@@ -167,6 +173,7 @@ export class ElectronIpcService implements OnDestroy {
         source: 'shell',
         correlationId,
       };
+      console.log(`[SHELL][2] ElectronIpcService: requestExternal | type: "${type}" | correlationId: ${correlationId} | timeout: ${timeoutMs}ms`);
       this.api.bridge.sendToExternal(message);
     });
   }

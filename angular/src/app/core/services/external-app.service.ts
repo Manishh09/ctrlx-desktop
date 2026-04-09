@@ -8,6 +8,13 @@ interface StatusUpdateEvent {
   progress?: number;
 }
 
+export interface CommLogEntry {
+  direction: 'in' | 'out';
+  type: string;
+  summary: string;
+  time: string;
+}
+
 /**
  * High-level service for interacting with the ctrlX FLOW external app.
  */
@@ -22,10 +29,12 @@ export class ExternalAppService {
     message: undefined,
     progress: undefined,
   });
+  private _commLog = signal<CommLogEntry[]>([]);
 
   readonly selectedNodes = this._selectedNodes.asReadonly();
   readonly selectedEdges = this._selectedEdges.asReadonly();
   readonly flowStatus = this._flowStatus.asReadonly();
+  readonly commLog = this._commLog.asReadonly();
   readonly isConnected = computed(() => this._flowStatus().status === 'connected');
 
   constructor() {
@@ -37,9 +46,18 @@ export class ExternalAppService {
     });
   }
 
+  // ── Internal helpers ─────────────────────
+
+  private addLog(direction: 'in' | 'out', type: string, summary: string): void {
+    const entry: CommLogEntry = { direction, type, summary, time: new Date().toLocaleTimeString() };
+    this._commLog.update(log => [entry, ...log].slice(0, 30));
+  }
+
   // ── Commands to ctrlX FLOW ────────────────
 
   loadModel(modelPath: string, modelType: '2d' | '3d' = '2d'): void {
+    console.log(`[SHELL][1] ExternalAppService: ACTION → loadModel | path: "${modelPath}" | type: ${modelType}`);
+    this.addLog('out', 'flow:load-model', `Load model: ${modelPath} (${modelType})`);
     this.ipc.sendToExternal('flow:load-model', {
       modelPath,
       modelType,
@@ -48,50 +66,74 @@ export class ExternalAppService {
   }
 
   triggerDeploy(): void {
+    console.log('[SHELL][1] ExternalAppService: ACTION → triggerDeploy');
+    this.addLog('out', 'flow:deploy', 'Deploy flow');
     this.ipc.sendToExternal('flow:deploy', {});
   }
 
   selectNodes(nodeIds: string[]): void {
+    console.log(`[SHELL][1] ExternalAppService: ACTION → selectNodes | ids: [${nodeIds}]`);
+    this.addLog('out', 'flow:select-nodes', `Select ${nodeIds.length} node(s)`);
     this.ipc.sendToExternal('flow:select-nodes', { nodeIds });
   }
 
   zoomToFit(): void {
+    console.log('[SHELL][1] ExternalAppService: ACTION → zoomToFit');
+    this.addLog('out', 'flow:zoom-to-fit', 'Zoom to fit all nodes');
     this.ipc.sendToExternal('flow:zoom-to-fit', {});
   }
 
   setTheme(theme: 'light' | 'dark'): void {
+    console.log(`[SHELL][1] ExternalAppService: ACTION → setTheme | theme: ${theme}`);
+    this.addLog('out', 'flow:set-theme', `Set theme: ${theme}`);
     this.ipc.sendToExternal('flow:set-theme', { theme });
   }
 
   exportFlow(format: 'json' | 'png' = 'json'): void {
+    console.log(`[SHELL][1] ExternalAppService: ACTION → exportFlow | format: ${format}`);
+    this.addLog('out', 'flow:export', `Export as ${format}`);
     this.ipc.sendToExternal('flow:export', { format });
   }
 
   // ── Handle incoming events ────────────────
 
   private handleExternalMessage(message: BridgeMessage): void {
+    console.log(`[SHELL][9] ExternalAppService: ⬇ Received from external | type: "${message.type}"`);
     switch (message.type) {
       case 'flow:selection-changed': {
         const event = message.payload as { selectedNodeIds: string[]; selectedEdgeIds: string[] };
-        this._selectedNodes.set(event.selectedNodeIds ?? []);
-        this._selectedEdges.set(event.selectedEdgeIds ?? []);
+        const nodes = event.selectedNodeIds ?? [];
+        const edges = event.selectedEdgeIds ?? [];
+        console.log(`[SHELL][9] ExternalAppService: selection-changed | nodes: [${nodes}] | edges: [${edges}]`);
+        this._selectedNodes.set(nodes);
+        this._selectedEdges.set(edges);
+        this.addLog('in', message.type, `${nodes.length} node(s), ${edges.length} edge(s) selected`);
         break;
       }
       case 'flow:status-update': {
         const event = message.payload as StatusUpdateEvent;
+        console.log(`[SHELL][9] ExternalAppService: status-update | status: "${event.status}" | msg: "${event.message ?? ''}"`);
         this._flowStatus.set(event);
+        this.addLog('in', message.type, `Status: ${event.status}${event.message ? ' — ' + event.message : ''}`);
         break;
       }
       case 'flow:node-double-click': {
-        console.log('[ExternalApp] Node double-clicked:', message.payload);
+        const payload = message.payload as { nodeId?: string; nodeType?: string };
+        console.log('[SHELL][9] ExternalAppService: node-double-click | payload:', payload);
+        this.addLog('in', message.type, `Node double-clicked: ${payload?.nodeId ?? 'unknown'}`);
         break;
       }
       case 'flow:error': {
-        console.error('[ExternalApp] Error from flow:', message.payload);
+        const payload = message.payload as { code?: string; message?: string };
+        console.error('[SHELL][9] ExternalAppService: error from external | payload:', payload);
+        this.addLog('in', message.type, `Error: ${payload?.message ?? 'unknown'}`);
         break;
       }
-      default:
-        console.log('[ExternalApp] Unhandled message:', message.type);
+      default: {
+        const summary = JSON.stringify(message.payload).slice(0, 60);
+        console.log(`[SHELL][9] ExternalAppService: unhandled type: "${message.type}" | payload: ${summary}`);
+        this.addLog('in', message.type, summary);
+      }
     }
   }
 }

@@ -41,6 +41,7 @@ export class ExternalViewService {
       // Reset readiness state for new session
       this.isExternalReady = false;
       this.messageQueue = [];
+      console.log('[MAIN][1] ExternalViewService: loadUrl called →', url);
 
       this.externalView = new WebContentsView({
         webPreferences: {
@@ -72,12 +73,14 @@ export class ExternalViewService {
 
       // Forward events to Angular shell
       this.externalView.webContents.on('did-navigate', (_event, navUrl) => {
+        console.log('[MAIN][2] ExternalViewService: external did-navigate →', navUrl);
         if (!this.shellView.webContents.isDestroyed()) {
           this.shellView.webContents.send(IPC_CHANNELS.EXTERNAL.DID_NAVIGATE, navUrl);
         }
       });
 
       this.externalView.webContents.on('did-fail-load', (_event, errorCode, errorDesc) => {
+        console.log('[MAIN][2] ExternalViewService: external did-fail-load | code:', errorCode, '| desc:', errorDesc);
         // Detach so Angular error overlay is not obscured by the native view
         this.detach();
         if (!this.shellView.webContents.isDestroyed()) {
@@ -94,6 +97,7 @@ export class ExternalViewService {
       // (e.g. Node-RED that won't call ctrlxBridge.notifyReady()) still
       // transition out of the loading state.
       this.externalView.webContents.once('did-finish-load', () => {
+        console.log('[MAIN][3] ExternalViewService: external did-finish-load → sending READY to shell');
         if (!this.shellView.webContents.isDestroyed()) {
           this.shellView.webContents.send(IPC_CHANNELS.EXTERNAL.READY);
         }
@@ -136,10 +140,12 @@ export class ExternalViewService {
 
     if (!this.isExternalReady) {
       // Queue the message — will be flushed on EXTERNAL_READY_ACK
+      console.log(`[MAIN][4] ExternalViewService: external not ready → QUEUED message | type: "${message.type}" | queue size: ${this.messageQueue.length + 1}`);
       this.messageQueue.push(message);
       return;
     }
 
+    console.log(`[MAIN][4] ExternalViewService: forwarding to external view | type: "${message.type}" | correlationId: ${message.correlationId ?? 'none'}`);
     this.externalView.webContents.send(IPC_CHANNELS.BRIDGE.FROM_SHELL, message);
   }
 
@@ -148,7 +154,9 @@ export class ExternalViewService {
       this.messageQueue = [];
       return;
     }
+    console.log(`[MAIN][4] ExternalViewService: flushing ${this.messageQueue.length} queued message(s) to external`);
     for (const msg of this.messageQueue) {
+      console.log(`[MAIN][4]   → flushed type: "${msg.type}"`);
       this.externalView.webContents.send(IPC_CHANNELS.BRIDGE.FROM_SHELL, msg);
     }
     this.messageQueue = [];
@@ -158,9 +166,10 @@ export class ExternalViewService {
     // ── Inbound: external → shell (events & replies) ──────────────────
     ipcMain.on(IPC_CHANNELS.BRIDGE.TO_SHELL, (_event, message: BridgeMessage) => {
       if (_event.sender !== this.externalView?.webContents) {
-        console.warn('[ExternalView] Rejected bridge message from unknown sender');
+        console.warn('[MAIN] ExternalViewService: Rejected bridge message from unknown sender');
         return;
       }
+      console.log(`[MAIN][6] ExternalViewService: received from EXTERNAL → forwarding to shell | type: "${message.type}" | source: ${message.source}`);
       if (!this.shellView.webContents.isDestroyed()) {
         this.shellView.webContents.send(IPC_CHANNELS.BRIDGE.FROM_EXTERNAL, message);
       }
@@ -169,6 +178,7 @@ export class ExternalViewService {
     // ── External signals it is alive and ready to receive messages ────
     ipcMain.on(IPC_CHANNELS.BRIDGE.EXTERNAL_READY_ACK, (_event) => {
       if (_event.sender !== this.externalView?.webContents) return;
+      console.log('[MAIN][3] ExternalViewService: EXTERNAL_READY_ACK received → marking ready + flushing queue');
       this.isExternalReady = true;
       this.flushMessageQueue();
     });
@@ -176,6 +186,7 @@ export class ExternalViewService {
     // ── Cooperative ready signal (ctrlxBridge.notifyReady()) ──────────
     ipcMain.on(IPC_CHANNELS.EXTERNAL.READY, (_event) => {
       if (_event.sender === this.externalView?.webContents) {
+        console.log('[MAIN][3] ExternalViewService: READY signal from external app → forwarding to shell');
         if (!this.shellView.webContents.isDestroyed()) {
           this.shellView.webContents.send(IPC_CHANNELS.EXTERNAL.READY);
         }

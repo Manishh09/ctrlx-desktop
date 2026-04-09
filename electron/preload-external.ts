@@ -22,6 +22,22 @@ const ctrlxBridge = {
   },
 
   /**
+   * Reply to a request from the host shell.
+   * @param correlationId The correlationId from the incoming request message.
+   */
+  replyToHost(correlationId: string, payload: unknown, isError = false): void {
+    const reply: BridgeMessage = {
+      type: 'reply',
+      payload,
+      timestamp: Date.now(),
+      source: 'external',
+      replyTo: correlationId,
+      isError,
+    };
+    ipcRenderer.send(IPC_CHANNELS.BRIDGE.TO_SHELL, reply);
+  },
+
+  /**
    * Listen for messages from the Angular host shell.
    */
   onMessageFromHost(callback: (message: BridgeMessage) => void): () => void {
@@ -34,9 +50,13 @@ const ctrlxBridge = {
 
   /**
    * Signal that the external app is ready to receive messages.
+   * Call this once your app has fully initialised.
+   * This also triggers the message queue flush in the main process.
    */
   notifyReady(): void {
     ipcRenderer.send(IPC_CHANNELS.EXTERNAL.READY);
+    // Separate ACK so main process flushes the bridge message queue
+    ipcRenderer.send(IPC_CHANNELS.BRIDGE.EXTERNAL_READY_ACK);
   },
 };
 

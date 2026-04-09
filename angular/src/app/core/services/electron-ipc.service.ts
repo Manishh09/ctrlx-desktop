@@ -1,4 +1,4 @@
-import { Injectable, signal, computed, NgZone, inject, OnDestroy } from '@angular/core';
+import { Injectable, signal, computed, inject, OnDestroy } from '@angular/core';
 import { AppConfig, BridgeMessage } from '@shared/models';
 
 /**
@@ -7,8 +7,14 @@ import { AppConfig, BridgeMessage } from '@shared/models';
  */
 @Injectable({ providedIn: 'root' })
 export class ElectronIpcService implements OnDestroy {
-  private zone = inject(NgZone);
   private cleanupFns: (() => void)[] = [];
+
+  /** Pending request/response callbacks keyed by correlationId. */
+  private pendingRequests = new Map<string, {
+    resolve: (value: unknown) => void;
+    reject: (reason: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
 
   // Reactive state
   private _externalAppStatus = signal<'idle' | 'loading' | 'ready' | 'error'>('idle');
@@ -38,36 +44,40 @@ export class ElectronIpcService implements OnDestroy {
 
   private setupListeners(): void {
     const unsub1 = this.api.bridge.onMessageFromExternal((message) => {
-      this.zone.run(() => {
-        this._lastExternalMessage.set(message);
-      });
+      // Route reply messages to their pending request callbacks
+      if (message.replyTo && this.pendingRequests.has(message.replyTo)) {
+        const pending = this.pendingRequests.get(message.replyTo)!;
+        clearTimeout(pending.timer);
+        this.pendingRequests.delete(message.replyTo);
+        if (message.isError) {
+          pending.reject(new Error(String(message.payload)));
+        } else {
+          pending.resolve(message.payload);
+        }
+        return;
+      }
+      this._lastExternalMessage.set(message);
     });
     this.cleanupFns.push(unsub1);
 
     const unsub2 = this.api.external.onNavigated((url) => {
-      this.zone.run(() => {
-        this._externalAppUrl.set(url);
-        this._externalAppStatus.set('ready');
-        this._externalLoadError.set(null);
-      });
+      this._externalAppUrl.set(url);
+      this._externalAppStatus.set('ready');
+      this._externalLoadError.set(null);
     });
     this.cleanupFns.push(unsub2);
 
     const unsub3 = this.api.external.onLoadFailed((error) => {
-      this.zone.run(() => {
-        this._externalAppStatus.set('error');
-        this._externalLoadError.set(error.errorDescription);
-        // Clear the external view so Angular overlays are not obscured
-        this.api.external.destroy();
-        this._externalAppUrl.set('');
-      });
+      this._externalAppStatus.set('error');
+      this._externalLoadError.set(error.errorDescription);
+      // Clear the external view so Angular overlays are not obscured
+      this.api.external.destroy();
+      this._externalAppUrl.set('');
     });
     this.cleanupFns.push(unsub3);
 
     const unsub4 = this.api.external.onReady(() => {
-      this.zone.run(() => {
-        this._externalAppStatus.set('ready');
-      });
+      this._externalAppStatus.set('ready');
     });
     this.cleanupFns.push(unsub4);
   }
@@ -123,6 +133,44 @@ export class ElectronIpcService implements OnDestroy {
     this.api.bridge.sendToExternal(message);
   }
 
+  /**
+   * Send a typed request to ctrlX FLOW and await a reply.
+   * The external app must respond with a BridgeMessage whose `replyTo`
+   * matches the outgoing `correlationId`.
+   *
+   * @param type    Message type (e.g. 'flow:get-zoom')
+   * @param payload Request payload
+   * @param timeoutMs How long to wait before rejecting (default 5 s)
+   */
+  requestExternal<T = unknown>(type: string, payload: unknown, timeoutMs = 5000): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      if (!this.isElectron) {
+        reject(new Error('Not running in Electron'));
+        return;
+      }
+      const correlationId = crypto.randomUUID();
+      const timer = setTimeout(() => {
+        this.pendingRequests.delete(correlationId);
+        reject(new Error(`Request '${type}' timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      this.pendingRequests.set(correlationId, {
+        resolve: resolve as (v: unknown) => void,
+        reject,
+        timer,
+      });
+
+      const message: BridgeMessage = {
+        type,
+        payload,
+        timestamp: Date.now(),
+        source: 'shell',
+        correlationId,
+      };
+      this.api.bridge.sendToExternal(message);
+    });
+  }
+
   // ── File System ────────────────
 
   readFile(path: string): Promise<string> {
@@ -160,5 +208,11 @@ export class ElectronIpcService implements OnDestroy {
 
   ngOnDestroy(): void {
     this.cleanupFns.forEach(fn => fn());
+    // Cancel all pending request timers to avoid memory leaks
+    for (const pending of this.pendingRequests.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error('Service destroyed'));
+    }
+    this.pendingRequests.clear();
   }
 }

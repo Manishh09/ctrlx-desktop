@@ -33,6 +33,8 @@ export const IPC_CHANNELS = {
     FROM_EXTERNAL: 'bridge:from-external',
     TO_SHELL: 'bridge:to-shell',
     FROM_SHELL: 'bridge:from-shell',
+    /** External app signals it is ready to receive queued messages. */
+    EXTERNAL_READY_ACK: 'bridge:external-ready-ack',
   },
 
   // Window management

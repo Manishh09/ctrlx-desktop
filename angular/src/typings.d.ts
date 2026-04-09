@@ -22,6 +22,10 @@ interface BridgeMessage<T = unknown> {
   timestamp: number;
   source: 'shell' | 'external';
   correlationId?: string;
+  /** Set on reply messages — matches the correlationId of the original request. */
+  replyTo?: string;
+  /** True when this message is an error reply to a request. */
+  isError?: boolean;
 }
 
 interface ElectronBridgeAPI {

@@ -16,6 +16,13 @@ export class ExternalViewService {
   private currentUrl: string | null = null;
   private isAttached = false;
 
+  /**
+   * Messages buffered while the external view is not yet ready.
+   * Flushed when the external app signals BRIDGE.EXTERNAL_READY_ACK.
+   */
+  private messageQueue: BridgeMessage[] = [];
+  private isExternalReady = false;
+
   constructor(
     private window: BaseWindow,
     private shellView: WebContentsView,
@@ -30,6 +37,10 @@ export class ExternalViewService {
         this.externalView.webContents.close();
         this.externalView = null;
       }
+
+      // Reset readiness state for new session
+      this.isExternalReady = false;
+      this.messageQueue = [];
 
       this.externalView = new WebContentsView({
         webPreferences: {
@@ -122,10 +133,29 @@ export class ExternalViewService {
 
   sendToExternal(message: BridgeMessage): void {
     if (!this.externalView || this.externalView.webContents.isDestroyed()) return;
+
+    if (!this.isExternalReady) {
+      // Queue the message — will be flushed on EXTERNAL_READY_ACK
+      this.messageQueue.push(message);
+      return;
+    }
+
     this.externalView.webContents.send(IPC_CHANNELS.BRIDGE.FROM_SHELL, message);
   }
 
+  private flushMessageQueue(): void {
+    if (!this.externalView || this.externalView.webContents.isDestroyed()) {
+      this.messageQueue = [];
+      return;
+    }
+    for (const msg of this.messageQueue) {
+      this.externalView.webContents.send(IPC_CHANNELS.BRIDGE.FROM_SHELL, msg);
+    }
+    this.messageQueue = [];
+  }
+
   private setupBridgeFromExternal(): void {
+    // ── Inbound: external → shell (events & replies) ──────────────────
     ipcMain.on(IPC_CHANNELS.BRIDGE.TO_SHELL, (_event, message: BridgeMessage) => {
       if (_event.sender !== this.externalView?.webContents) {
         console.warn('[ExternalView] Rejected bridge message from unknown sender');
@@ -136,6 +166,14 @@ export class ExternalViewService {
       }
     });
 
+    // ── External signals it is alive and ready to receive messages ────
+    ipcMain.on(IPC_CHANNELS.BRIDGE.EXTERNAL_READY_ACK, (_event) => {
+      if (_event.sender !== this.externalView?.webContents) return;
+      this.isExternalReady = true;
+      this.flushMessageQueue();
+    });
+
+    // ── Cooperative ready signal (ctrlxBridge.notifyReady()) ──────────
     ipcMain.on(IPC_CHANNELS.EXTERNAL.READY, (_event) => {
       if (_event.sender === this.externalView?.webContents) {
         if (!this.shellView.webContents.isDestroyed()) {
@@ -156,5 +194,7 @@ export class ExternalViewService {
     }
     this.externalView = null;
     this.currentUrl = null;
+    this.isExternalReady = false;
+    this.messageQueue = [];
   }
 }

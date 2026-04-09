@@ -1,0 +1,12 @@
+node_modules/
+dist/
+release/
+angular/dist/
+angular/node_modules/
+angular/.angular/
+electron/dist/
+*.js.map
+.DS_Store
+Thumbs.db
+*.log
+.env

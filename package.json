@@ -1,0 +1,48 @@
+{
+  "name": "ctrlx-desktop",
+  "version": "1.0.0",
+  "description": "Industrial engineering desktop application - Electron 41 + Angular 21 + WebContentsView",
+  "main": "electron/dist/electron/main.js",
+  "private": true,
+  "scripts": {
+    "postinstall": "npm install --prefix angular",
+    "angular:dev": "cd angular && npx ng serve --port 4200",
+    "angular:build": "cd angular && npx ng build --configuration production",
+    "electron:compile": "tsc -p electron/tsconfig.json",
+    "electron:dev": "npm run electron:compile && electron .",
+    "dev": "concurrently -k \"npm run angular:dev\" \"wait-on http://localhost:4200 && npm run electron:dev\"",
+    "build": "npm run angular:build && npm run electron:compile",
+    "package": "npm run build && electron-builder",
+    "start": "npm run dev"
+  },
+  "build": {
+    "appId": "com.ctrlx.desktop",
+    "productName": "ctrlX Desktop",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/dist/**/*",
+      "angular/dist/**/*",
+      "shared/**/*.js",
+      "shared/**/*.d.ts"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^41.1.1",
+    "electron-builder": "^25.1.8",
+    "typescript": "~5.9.0",
+    "concurrently": "^9.1.0",
+    "wait-on": "^8.0.2"
+  }
+}

@@ -84,7 +84,10 @@ import { TitleCasePipe } from '@angular/common';
         <!-- Quick Actions -->
         <div class="section">
           <h4 class="section-title">Developer</h4>
-          <button class="dev-btn" (click)="toggleDevTools()">Toggle DevTools</button>
+          <div style="display:flex;gap:6px;flex-direction:column">
+            <button class="dev-btn" (click)="toggleDevTools()">Toggle Shell DevTools</button>
+            <button class="dev-btn" (click)="openExternalDevTools()">Open External DevTools</button>
+          </div>
         </div>
       </div>
     </div>
@@ -321,6 +324,10 @@ export class RightSidebarComponent {
 
   setTheme(theme: 'light' | 'dark'): void {
     this.externalApp.setTheme(theme);
+  }
+
+  openExternalDevTools(): void {
+    this.ipc.openExternalDevTools();
   }
 
   toggleDevTools(): void {

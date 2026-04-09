@@ -213,6 +213,13 @@ export class ElectronIpcService implements OnDestroy {
   closeWindow(): void { this.api.window.close(); }
   toggleDevTools(): void { this.api.window.toggleDevTools(); }
 
+  /** Open DevTools for the external WebContentsView — NOT the shell or browser. */
+  openExternalDevTools(): void {
+    if (!this.isElectron) return;
+    console.log('[SHELL] ElectronIpcService: openExternalDevTools → sending IPC');
+    this.api.external.openDevTools();
+  }
+
   ngOnDestroy(): void {
     this.cleanupFns.forEach(fn => fn());
     // Cancel all pending request timers to avoid memory leaks

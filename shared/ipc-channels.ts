@@ -25,6 +25,8 @@ export const IPC_CHANNELS = {
     DID_NAVIGATE: 'external:did-navigate',
     DID_FAIL_LOAD: 'external:did-fail-load',
     DESTROY: 'external:destroy',
+    /** Open DevTools panel specifically for the external WebContentsView. */
+    TOGGLE_DEVTOOLS: 'external:toggle-devtools',
   },
 
   // Cross-app messaging (Angular ↔ ctrlX FLOW)

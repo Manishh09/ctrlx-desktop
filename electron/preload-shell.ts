@@ -88,6 +88,10 @@ const electronAPI = {
     destroy(): void {
       ipcRenderer.send(IPC_CHANNELS.EXTERNAL.DESTROY);
     },
+    /** Open DevTools for the external WebContentsView (not the shell or browser). */
+    openDevTools(): void {
+      ipcRenderer.send(IPC_CHANNELS.EXTERNAL.TOGGLE_DEVTOOLS);
+    },
     onNavigated(cb: (url: string) => void): () => void {
       const handler = (_e: IpcRendererEvent, url: string) => cb(url);
       ipcRenderer.on(IPC_CHANNELS.EXTERNAL.DID_NAVIGATE, handler);

@@ -48,7 +48,7 @@ export class ExternalAppService {
 
   // ── Internal helpers ─────────────────────
 
-  private addLog(direction: 'in' | 'out', type: string, summary: string): void {
+   addLog(direction: 'in' | 'out', type: string, summary: string): void {
     const entry: CommLogEntry = { direction, type, summary, time: new Date().toLocaleTimeString() };
     this._commLog.update(log => [entry, ...log].slice(0, 30));
   }
@@ -127,6 +127,12 @@ export class ExternalAppService {
         const payload = message.payload as { code?: string; message?: string };
         console.error('[SHELL][9] ExternalAppService: error from external | payload:', payload);
         this.addLog('in', message.type, `Error: ${payload?.message ?? 'unknown'}`);
+        break;
+      }
+      case 'message': {
+        const payload = message.payload as { text?: string };
+        console.log('[SHELL][9] ExternalAppService: message from external | text:', payload?.text);
+        this.addLog('in', message.type, payload?.text ?? '(empty)');
         break;
       }
       default: {

@@ -133,6 +133,10 @@ function setupExternalViewIPC(): void {
     externalViewService?.destroy();
   });
 
+  ipcMain.on(IPC_CHANNELS.EXTERNAL.TOGGLE_DEVTOOLS, () => {
+    externalViewService?.openDevTools();
+  });
+
   // ── Bridge: Shell → External ────────────────
   ipcMain.on(IPC_CHANNELS.BRIDGE.TO_EXTERNAL, (_event, message) => {
     externalViewService?.sendToExternal(message);

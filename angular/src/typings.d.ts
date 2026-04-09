@@ -11,6 +11,8 @@ interface ElectronExternalAPI {
   reload(): void;
   detach(): void;
   destroy(): void;
+  /** Open DevTools specifically for the external WebContentsView. */
+  openDevTools(): void;
   onNavigated(cb: (url: string) => void): () => void;
   onLoadFailed(cb: (error: { errorCode: number; errorDescription: string }) => void): () => void;
   onReady(cb: () => void): () => void;

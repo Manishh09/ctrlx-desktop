@@ -2,24 +2,43 @@
  * Preload script for the external ctrlX FLOW renderer.
  * Minimal API surface: only bridge messaging is exposed.
  * This renderer is fully sandboxed.
+ *
+ * IMPORTANT: Sandboxed preloads cannot require() files from disk.
+ * Only require('electron') is allowed. All channel names are inlined here.
+ * If you add a channel, update both this file AND shared/ipc-channels.ts.
  */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import { IPC_CHANNELS } from '../shared/ipc-channels';
-import type { BridgeMessage } from '../shared/models';
+
+// ── Inlined channel names (mirrors shared/ipc-channels.ts) ────────────────
+// Cannot use require('../shared/ipc-channels') — sandbox blocks file requires.
+const CH = {
+  BRIDGE_TO_SHELL:          'bridge:to-shell',
+  BRIDGE_FROM_SHELL:        'bridge:from-shell',
+  BRIDGE_EXTERNAL_READY_ACK:'bridge:external-ready-ack',
+  EXTERNAL_READY:           'external:ready',
+} as const;
+
+// ── DIAGNOSTIC: this line fires the instant the preload script is parsed ──
+console.log(
+  '%c[EXTERNAL][PRELOAD] preload-external.js is RUNNING inside this WebContentsView',
+  'color:#41B496;font-weight:bold;font-size:13px',
+);
+console.log('[EXTERNAL][PRELOAD] If you see this in the external-view DevTools → preload loaded ✅');
+console.log('[EXTERNAL][PRELOAD] If you ONLY see this in the browser DevTools → wrong window! Open via "Open External DevTools" button in the Angular right-sidebar.');
 
 const ctrlxBridge = {
   /**
    * Send a message to the Angular host shell.
    */
   sendToHost(type: string, payload: unknown): void {
-    const message: BridgeMessage = {
+    const message = {
       type,
       payload,
       timestamp: Date.now(),
-      source: 'external',
+      source: 'external' as const,
     };
     console.log(`[EXTERNAL][5] preload-external: sendToHost | type: "${type}" | sending via IPC bridge:to-shell`);
-    ipcRenderer.send(IPC_CHANNELS.BRIDGE.TO_SHELL, message);
+    ipcRenderer.send(CH.BRIDGE_TO_SHELL, message);
   },
 
   /**
@@ -27,28 +46,28 @@ const ctrlxBridge = {
    * @param correlationId The correlationId from the incoming request message.
    */
   replyToHost(correlationId: string, payload: unknown, isError = false): void {
-    const reply: BridgeMessage = {
+    const reply = {
       type: 'reply',
       payload,
       timestamp: Date.now(),
-      source: 'external',
+      source: 'external' as const,
       replyTo: correlationId,
       isError,
     };
     console.log(`[EXTERNAL][5] preload-external: replyToHost | correlationId: ${correlationId} | isError: ${isError}`);
-    ipcRenderer.send(IPC_CHANNELS.BRIDGE.TO_SHELL, reply);
+    ipcRenderer.send(CH.BRIDGE_TO_SHELL, reply);
   },
 
   /**
    * Listen for messages from the Angular host shell.
    */
-  onMessageFromHost(callback: (message: BridgeMessage) => void): () => void {
-    const handler = (_event: IpcRendererEvent, message: BridgeMessage) => {
-      console.log(`[EXTERNAL][5] preload-external: received from HOST | type: "${message.type}" | payload:`, message.payload);
+  onMessageFromHost(callback: (message: Record<string, unknown>) => void): () => void {
+    const handler = (_event: IpcRendererEvent, message: Record<string, unknown>) => {
+      console.log(`[EXTERNAL][5] preload-external: received from HOST | type: "${message['type']}" | payload:`, message['payload']);
       callback(message);
     };
-    ipcRenderer.on(IPC_CHANNELS.BRIDGE.FROM_SHELL, handler);
-    return () => ipcRenderer.removeListener(IPC_CHANNELS.BRIDGE.FROM_SHELL, handler);
+    ipcRenderer.on(CH.BRIDGE_FROM_SHELL, handler);
+    return () => ipcRenderer.removeListener(CH.BRIDGE_FROM_SHELL, handler);
   },
 
   /**
@@ -58,9 +77,9 @@ const ctrlxBridge = {
    */
   notifyReady(): void {
     console.log('[EXTERNAL][4] preload-external: notifyReady() called → sending READY + EXTERNAL_READY_ACK');
-    ipcRenderer.send(IPC_CHANNELS.EXTERNAL.READY);
+    ipcRenderer.send(CH.EXTERNAL_READY);
     // Separate ACK so main process flushes the bridge message queue
-    ipcRenderer.send(IPC_CHANNELS.BRIDGE.EXTERNAL_READY_ACK);
+    ipcRenderer.send(CH.BRIDGE_EXTERNAL_READY_ACK);
   },
 };
 
@@ -93,35 +112,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }, 400);
 
     // Step 3: Periodically simulate selection events back to host
-    let demoTick = 0;
-    const demoInterval = setInterval(() => {
-      demoTick++;
-
-      if (demoTick % 3 === 1) {
-        const nodeIds = [`node-${demoTick}`, `node-${demoTick + 1}`];
-        console.log(`[EXTERNAL][5] preload-external: ⬆ DEMO tick ${demoTick} → sending "flow:selection-changed" to HOST | nodes: [${nodeIds}]`);
-        ctrlxBridge.sendToHost('flow:selection-changed', {
-          selectedNodeIds: nodeIds,
-          selectedEdgeIds: [`edge-${demoTick}`],
-        });
-      } else if (demoTick % 3 === 2) {
-        console.log(`[EXTERNAL][5] preload-external: ⬆ DEMO tick ${demoTick} → sending "flow:node-double-click" to HOST`);
-        ctrlxBridge.sendToHost('flow:node-double-click', {
-          nodeId: `node-${demoTick}`,
-          label: `Demo Node ${demoTick}`,
-          position: { x: demoTick * 40, y: demoTick * 20 },
-        });
-      } else {
-        console.log(`[EXTERNAL][5] preload-external: ⬆ DEMO tick ${demoTick} → sending "flow:status-update" to HOST`);
-        ctrlxBridge.sendToHost('flow:status-update', {
-          status: 'connected',
-          message: `Flow running — tick ${demoTick}`,
-          progress: (demoTick * 10) % 100,
-        });
-      }
-
-      if (demoTick >= 15) clearInterval(demoInterval);
-    }, 4000);
+    
 
   }, 800);
 

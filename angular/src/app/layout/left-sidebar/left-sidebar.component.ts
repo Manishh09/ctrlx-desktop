@@ -230,6 +230,7 @@ export class LeftSidebarComponent {
   sendDemoToExternal(): void {
     const payload = { message: 'Hello from Angular host!', ts: Date.now() };
     console.log('[SHELL][1] LeftSidebar: ACTION → sendDemoToExternal | payload:', payload);
+    this.externalApp.addLog('out', 'host:demo-ping', payload.message);
     this.ipc.sendToExternal('host:demo-ping', payload);
   }
 

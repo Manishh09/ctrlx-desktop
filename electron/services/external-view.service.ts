@@ -4,6 +4,7 @@ import {
   ipcMain,
 } from 'electron';
 import * as path from 'path';
+import * as fs from 'fs';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import type { BridgeMessage, ExternalAppBounds } from '../../shared/models';
 
@@ -41,6 +42,14 @@ export class ExternalViewService {
       // Reset readiness state for new session
       this.isExternalReady = false;
       this.messageQueue = [];
+
+      // ── Diagnostic: verify the preload file exists on disk ────────
+      const preloadPath = path.join(__dirname, '../preload-external.js');
+      const preloadExists = fs.existsSync(preloadPath);
+      console.log(
+        `[MAIN][1] ExternalViewService: preload path: "${preloadPath}"`,
+        preloadExists ? '✅ file exists' : '❌ FILE NOT FOUND — run \'npm run electron:compile\' first!',
+      );
       console.log('[MAIN][1] ExternalViewService: loadUrl called →', url);
 
       this.externalView = new WebContentsView({
@@ -101,6 +110,23 @@ export class ExternalViewService {
         if (!this.shellView.webContents.isDestroyed()) {
           this.shellView.webContents.send(IPC_CHANNELS.EXTERNAL.READY);
         }
+
+        // ── Diagnostic: verify ctrlxBridge was exposed by the preload ──
+        this.externalView?.webContents.executeJavaScript('typeof window.ctrlxBridge')
+          .then((result: string) => {
+            if (result === 'object') {
+              console.log('[MAIN][DIAG] ✅ window.ctrlxBridge is EXPOSED — preload loaded correctly');
+            } else {
+              console.error(
+                `[MAIN][DIAG] ❌ window.ctrlxBridge is "${result}" in external renderer.`,
+                '\n  Possible causes:',
+                '\n  1. Preload JS not compiled (run: npm run electron:compile)',
+                '\n  2. Preload path mismatch (check log above)',
+                '\n  3. contextBridge.exposeInMainWorld() threw an error in the preload',
+              );
+            }
+          })
+          .catch((err: Error) => console.error('[MAIN][DIAG] executeJavaScript failed:', err));
       });
 
       this.currentUrl = url;
@@ -196,6 +222,12 @@ export class ExternalViewService {
 
   reload(): void {
     this.externalView?.webContents.reload();
+  }
+
+  openDevTools(): void {
+    if (!this.externalView || this.externalView.webContents.isDestroyed()) return;
+    this.externalView.webContents.openDevTools({ mode: 'detach' });
+    console.log('[MAIN] ExternalViewService: opened DevTools for external WebContentsView');
   }
 
   destroy(): void {

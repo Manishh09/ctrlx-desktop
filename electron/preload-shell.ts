@@ -9,6 +9,7 @@ import type {
   ExternalAppBounds,
   AppConfig,
   FileWriteOperation,
+  ProcessMetric,
 } from '../shared/models';
 
 // Type-safe channel whitelist
@@ -34,6 +35,8 @@ const ALLOWED_INVOKE_CHANNELS = new Set<string>([
   IPC_CHANNELS.SHELL.SELECT_DIRECTORY,
   IPC_CHANNELS.EXTERNAL.LOAD_URL,
   IPC_CHANNELS.WINDOW.IS_MAXIMIZED,
+  IPC_CHANNELS.PROCESS.GET_METRICS,
+  IPC_CHANNELS.PROCESS.KILL,
 ]);
 
 const ALLOWED_RECEIVE_CHANNELS = new Set<string>([
@@ -155,6 +158,25 @@ const electronAPI = {
     toggleDevTools(): void { ipcRenderer.send(IPC_CHANNELS.WINDOW.TOGGLE_DEVTOOLS); },
     isMaximized(): Promise<boolean> {
       return ipcRenderer.invoke(IPC_CHANNELS.WINDOW.IS_MAXIMIZED) as any;
+    },
+  },
+
+  /**
+   * Process Monitor API — Chrome Task Manager equivalent.
+   * All calls go through validated IPC channels; no Node.js APIs
+   * are exposed directly to the renderer.
+   */
+  processMonitor: {
+    /** Fetch a snapshot of all Electron process metrics. */
+    getMetrics(): Promise<ProcessMetric[]> {
+      return ipcRenderer.invoke(IPC_CHANNELS.PROCESS.GET_METRICS) as Promise<ProcessMetric[]>;
+    },
+    /**
+     * Terminate an Electron process by PID.
+     * The main process validates that the PID belongs to an app process.
+     */
+    kill(pid: number): Promise<{ success: boolean; error?: string }> {
+      return ipcRenderer.invoke(IPC_CHANNELS.PROCESS.KILL, pid) as any;
     },
   },
 };

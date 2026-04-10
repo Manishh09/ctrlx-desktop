@@ -233,6 +233,20 @@ export class ExternalViewService {
     ipcMain.on(IPC_CHANNELS.EXTERNAL.READY, this.onExternalReady);
   }
 
+  /**
+   * Returns the OS PID of the external WebContentsView renderer,
+   * or null when no external view is currently loaded.
+   * Used by the Process Monitor to label the external process.
+   */
+  getExternalOSProcessId(): number | null {
+    if (!this.externalView || this.externalView.webContents.isDestroyed()) return null;
+    try {
+      return this.externalView.webContents.getOSProcessId();
+    } catch {
+      return null;
+    }
+  }
+
   reload(): void {
     this.externalView?.webContents.reload();
   }

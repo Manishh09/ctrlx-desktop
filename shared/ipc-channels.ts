@@ -39,6 +39,12 @@ export const IPC_CHANNELS = {
     EXTERNAL_READY_ACK: 'bridge:external-ready-ack',
   },
 
+  // Process monitor (like Chrome Task Manager)
+  PROCESS: {
+    GET_METRICS: 'process:get-metrics',
+    KILL: 'process:kill',
+  },
+
   // Window management
   WINDOW: {
     MINIMIZE: 'window:minimize',

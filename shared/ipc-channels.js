@@ -34,6 +34,11 @@ exports.IPC_CHANNELS = {
         TO_SHELL: 'bridge:to-shell',
         FROM_SHELL: 'bridge:from-shell',
     },
+    // Process monitor (like Chrome Task Manager)
+    PROCESS: {
+        GET_METRICS: 'process:get-metrics',
+        KILL: 'process:kill',
+    },
     // Window management
     WINDOW: {
         MINIMIZE: 'window:minimize',

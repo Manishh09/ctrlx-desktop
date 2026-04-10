@@ -67,6 +67,25 @@ interface ElectronWindowAPI {
   isMaximized(): Promise<boolean>;
 }
 
+/** Mirrors the shared ProcessMetric model (avoids a shared-lib import in typings). */
+interface ProcessMetric {
+  pid: number;
+  label: string;
+  type: string;
+  cpu: number;
+  memory: number;
+}
+
+interface ElectronProcessMonitorAPI {
+  /** Returns a snapshot of all Electron process metrics. */
+  getMetrics(): Promise<ProcessMetric[]>;
+  /**
+   * Terminates an Electron process by PID.
+   * The main process validates that the PID belongs to an app process.
+   */
+  kill(pid: number): Promise<{ success: boolean; error?: string }>;
+}
+
 interface ElectronAPI {
   send(channel: string, ...args: unknown[]): void;
   invoke(channel: string, ...args: unknown[]): Promise<unknown>;
@@ -76,6 +95,7 @@ interface ElectronAPI {
   fs: ElectronFsAPI;
   config: ElectronConfigAPI;
   window: ElectronWindowAPI;
+  processMonitor: ElectronProcessMonitorAPI;
 }
 
 interface CtrlxBridge {

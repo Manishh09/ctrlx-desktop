@@ -1,12 +1,13 @@
-import { Component, inject, output } from '@angular/core';
+import { Component, inject, output, signal } from '@angular/core';
 import { ExternalAppService } from '../../core/services/external-app.service';
 import { ElectronIpcService } from '../../core/services/electron-ipc.service';
 import { TitleCasePipe } from '@angular/common';
+import { ProcessMonitorComponent } from '../../features/process-monitor/process-monitor.component';
 
 @Component({
   selector: 'app-right-sidebar',
   standalone: true,
-  imports: [TitleCasePipe],
+  imports: [TitleCasePipe, ProcessMonitorComponent],
   template: `
     <div class="sidebar-container">
       <div class="sidebar-header">
@@ -77,6 +78,19 @@ import { TitleCasePipe } from '@angular/common';
                   <div class="log-summary">{{ entry.summary }}</div>
                 </div>
               }
+            </div>
+          }
+        </div>
+
+        <!-- Process Monitor -->
+        <div class="section section--flush">
+          <div class="section-toggle" (click)="showProcessMonitor.set(!showProcessMonitor())">
+            <h4 class="section-title">Process Monitor</h4>
+            <span class="toggle-chevron">{{ showProcessMonitor() ? '▾' : '▸' }}</span>
+          </div>
+          @if (showProcessMonitor()) {
+            <div class="pm-panel">
+              <app-process-monitor />
             </div>
           }
         </div>
@@ -307,6 +321,30 @@ import { TitleCasePipe } from '@angular/common';
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+
+    /* ── Process Monitor section ── */
+    .section--flush { padding: 0; overflow: hidden; }
+
+    .section-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .section-toggle:hover { background: var(--bg-hover); }
+    .section-toggle .section-title { margin-bottom: 0; }
+
+    .toggle-chevron {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .pm-panel {
+      height: 380px;
+      border-top: 1px solid var(--border-color);
+    }
   `],
 
 })
@@ -321,6 +359,8 @@ export class RightSidebarComponent {
   externalStatus = this.ipc.externalAppStatus;
   externalUrl = this.ipc.externalAppUrl;
   loadError = this.ipc.externalLoadError;
+
+  readonly showProcessMonitor = signal(false);
 
   setTheme(theme: 'light' | 'dark'): void {
     this.externalApp.setTheme(theme);

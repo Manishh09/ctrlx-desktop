@@ -61,3 +61,20 @@ export interface StatusUpdateEvent {
   message?: string;
   progress?: number;
 }
+
+/**
+ * A snapshot of one OS process collected by app.getAppMetrics().
+ * Passed over IPC from main → renderer for the Process Monitor UI.
+ */
+export interface ProcessMetric {
+  /** OS process ID */
+  pid: number;
+  /** Human-readable label, e.g. "Angular UI", "External 3D App", "GPU" */
+  label: string;
+  /** Electron process type: Browser, Tab, GPU, Utility, … */
+  type: string;
+  /** CPU usage in percent (0–100+). Absent for processes that do not report it. */
+  cpu: number;
+  /** Private memory footprint in megabytes */
+  memory: number;
+}

@@ -170,6 +170,72 @@ function setupWindowIPC(): void {
 }
 
 // ──────────────────────────────────────────
+// IPC: Process Monitor (Chrome Task Manager-style)
+// ──────────────────────────────────────────
+function setupProcessMonitorIPC(): void {
+  ipcMain.handle(IPC_CHANNELS.PROCESS.GET_METRICS, async () => {
+    // Collect known PIDs so we can label them
+    const angularPid = shellView && !shellView.webContents.isDestroyed()
+      ? shellView.webContents.getOSProcessId()
+      : null;
+
+    const externalPid = externalViewService?.getExternalOSProcessId() ?? null;
+
+    // app.getAppMetrics() returns ALL Electron process metrics (main, renderers, GPU, …)
+    const raw = app.getAppMetrics();
+
+    return raw.map((m) => {
+      let label: string;
+      if (m.pid === angularPid) {
+        label = 'Angular UI';
+      } else if (m.pid === externalPid) {
+        label = 'External 3D App';
+      } else if (m.type === 'Browser') {
+        label = 'Main Process';
+      } else {
+        // Use the process name/service name when available, fall back to type
+        label = (m as any).name || (m as any).serviceName || m.type;
+      }
+
+      return {
+        pid: m.pid,
+        label,
+        type: m.type,
+        // percentCPUUsage is a 0–100 value (can exceed 100 on multi-core)
+        cpu: Math.round((m.cpu?.percentCPUUsage ?? 0) * 10) / 10,
+        // workingSetSize is in KB; convert to MB
+        memory: Math.round(((m.memory?.workingSetSize ?? 0) / 1024) * 10) / 10,
+      };
+    });
+  });
+
+  /**
+   * Kill a process by PID.
+   * Security: only PIDs that are currently tracked by app.getAppMetrics()
+   * are eligible — prevents the renderer from killing arbitrary OS processes.
+   */
+  ipcMain.handle(IPC_CHANNELS.PROCESS.KILL, async (_event, pid: unknown) => {
+    if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) {
+      throw new Error('Invalid PID');
+    }
+
+    // Validate that the PID belongs to one of Electron's own processes
+    const knownPids = new Set(app.getAppMetrics().map((m) => m.pid));
+    if (!knownPids.has(pid)) {
+      throw new Error(`PID ${pid} is not an Electron process`);
+    }
+
+    try {
+      process.kill(pid);
+      return { success: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { success: false, error: message };
+    }
+  });
+}
+
+// ──────────────────────────────────────────
 // App Lifecycle
 // ──────────────────────────────────────────
 app.whenReady().then(() => {
@@ -187,6 +253,8 @@ app.whenReady().then(() => {
   setupExternalViewIPC();
   // Window controls can be set up after window creation, but we do it here for consistency and to ensure handlers are registered before Angular tries to use them.
   setupWindowIPC();
+  // Process Monitor (Chrome Task Manager-style)
+  setupProcessMonitorIPC();
 
   // Create the main window after IPC handlers are set up
   createMainWindow();

@@ -17,6 +17,7 @@ const ALLOWED_SEND_CHANNELS = new Set<string>([
   IPC_CHANNELS.EXTERNAL.RELOAD,
   IPC_CHANNELS.EXTERNAL.DETACH,
   IPC_CHANNELS.EXTERNAL.DESTROY,
+  IPC_CHANNELS.EXTERNAL.SET_BOUNDS,
   IPC_CHANNELS.BRIDGE.TO_EXTERNAL,
   IPC_CHANNELS.WINDOW.MINIMIZE,
   IPC_CHANNELS.WINDOW.MAXIMIZE,
@@ -32,7 +33,6 @@ const ALLOWED_INVOKE_CHANNELS = new Set<string>([
   IPC_CHANNELS.SHELL.SELECT_FILE,
   IPC_CHANNELS.SHELL.SELECT_DIRECTORY,
   IPC_CHANNELS.EXTERNAL.LOAD_URL,
-  IPC_CHANNELS.EXTERNAL.SET_BOUNDS,
   IPC_CHANNELS.WINDOW.IS_MAXIMIZED,
 ]);
 
@@ -76,8 +76,8 @@ const electronAPI = {
     loadUrl(url: string): Promise<{ success: boolean; error?: string }> {
       return ipcRenderer.invoke(IPC_CHANNELS.EXTERNAL.LOAD_URL, url) as any;
     },
-    setBounds(bounds: ExternalAppBounds): Promise<void> {
-      return ipcRenderer.invoke(IPC_CHANNELS.EXTERNAL.SET_BOUNDS, bounds) as any;
+    setBounds(bounds: ExternalAppBounds): void {
+      ipcRenderer.send(IPC_CHANNELS.EXTERNAL.SET_BOUNDS, bounds);
     },
     reload(): void {
       ipcRenderer.send(IPC_CHANNELS.EXTERNAL.RELOAD);

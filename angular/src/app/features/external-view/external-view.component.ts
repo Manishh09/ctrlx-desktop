@@ -8,6 +8,7 @@ import {
   signal,
   input,
   effect,
+  untracked,
 } from '@angular/core';
 import { ElectronIpcService } from '../../core/services/electron-ipc.service';
 
@@ -233,6 +234,18 @@ export class ExternalViewComponent implements OnInit, AfterViewInit, OnDestroy {
         if (this.ipc.isElectron) this.ipc.detachExternal();
       }
     });
+
+    // Auto-load the external app the first time this tab becomes active,
+    // provided no connection has been attempted yet.
+    // `untracked` reads status without making it a dependency — this effect
+    // must only fire on active/viewInitialized changes, not on every status
+    // transition, to avoid re-triggering during loading/ready/error states.
+    effect(() => {
+      if (!this.viewInitialized() || !this.active()) return;
+      if (untracked(() => this.status()) === 'idle') {
+        void this.loadExternalApp();
+      }
+    });
   }
 
   ngOnInit(): void {
@@ -251,37 +264,45 @@ export class ExternalViewComponent implements OnInit, AfterViewInit, OnDestroy {
     this.viewInitialized.set(true);
   }
 
+  /**
+   * Read the slot's current DOM rect and push it to the main process.
+   * Called both from the ResizeObserver/window-resize callbacks and
+   * directly after loadUrl resolves — because the WebContentsView does
+   * not exist until loadUrl completes, so the initial bounds snap fired
+   * by startBoundsTracking() is always a no-op and must be repeated.
+   */
+  private sendCurrentBounds(): void {
+    if (!this.ipc.isElectron || !this.slot) return;
+    const rect = this.slot.getBoundingClientRect();
+    const bounds = {
+      x: Math.round(rect.x),
+      y: Math.round(rect.y),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    };
+    if (bounds.width > 0 && bounds.height > 0) {
+      this.ipc.setExternalBounds(bounds);
+    }
+  }
+
   private startBoundsTracking(): void {
     if (!this.ipc.isElectron || !this.slot) return;
 
     // Tear down any stale observer before re-creating.
     this.stopBoundsTracking();
 
-    const updateBounds = (): void => {
-      const rect = this.slot!.getBoundingClientRect();
-      const bounds = {
-        x: Math.round(rect.x),
-        y: Math.round(rect.y),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      };
-      if (bounds.width > 0 && bounds.height > 0) {
-        this.ipc.setExternalBounds(bounds);
-      }
-    };
-
     this.resizeObserver = new ResizeObserver(() => {
       if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
-      this.animFrameId = requestAnimationFrame(updateBounds);
+      this.animFrameId = requestAnimationFrame(() => this.sendCurrentBounds());
     });
     this.resizeObserver.observe(this.slot);
 
-    this.windowResizeHandler = updateBounds;
+    this.windowResizeHandler = () => this.sendCurrentBounds();
     window.addEventListener('resize', this.windowResizeHandler);
 
     // Snap bounds immediately so the native view appears without waiting
     // for the first ResizeObserver callback.
-    requestAnimationFrame(updateBounds);
+    requestAnimationFrame(() => this.sendCurrentBounds());
   }
 
   private stopBoundsTracking(): void {
@@ -303,6 +324,11 @@ export class ExternalViewComponent implements OnInit, AfterViewInit, OnDestroy {
     try {
       await this.ipc.loadExternalApp(url);
       this.ipc.updateConfig({ externalAppUrl: url }).catch(() => {});
+      // The WebContentsView is created inside loadUrl in the main process.
+      // The bounds snap fired by startBoundsTracking() ran before the view
+      // existed (main process returned early), so we must re-send bounds now
+      // that the view is ready to be positioned and attached.
+      requestAnimationFrame(() => this.sendCurrentBounds());
     } catch (error) {
       console.error('Failed to load external app:', error);
     }

@@ -7,7 +7,7 @@
 
 interface ElectronExternalAPI {
   loadUrl(url: string): Promise<{ success: boolean; error?: string }>;
-  setBounds(bounds: { x: number; y: number; width: number; height: number }): Promise<void>;
+  setBounds(bounds: { x: number; y: number; width: number; height: number }): void;
   reload(): void;
   detach(): void;
   destroy(): void;

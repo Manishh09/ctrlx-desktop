@@ -101,9 +101,14 @@ export class ExternalAppService {
     console.log(`[SHELL][9] ExternalAppService: ⬇ Received from external | type: "${message.type}"`);
     switch (message.type) {
       case 'flow:selection-changed': {
-        const event = message.payload as { selectedNodeIds: string[]; selectedEdgeIds: string[] };
-        const nodes = event.selectedNodeIds ?? [];
-        const edges = event.selectedEdgeIds ?? [];
+        if (!message.payload || typeof message.payload !== 'object') break;
+        const event = message.payload as { selectedNodeIds?: unknown; selectedEdgeIds?: unknown };
+        const nodes = Array.isArray(event.selectedNodeIds)
+          ? (event.selectedNodeIds as unknown[]).filter((n): n is string => typeof n === 'string')
+          : [];
+        const edges = Array.isArray(event.selectedEdgeIds)
+          ? (event.selectedEdgeIds as unknown[]).filter((e): e is string => typeof e === 'string')
+          : [];
         console.log(`[SHELL][9] ExternalAppService: selection-changed | nodes: [${nodes}] | edges: [${edges}]`);
         this._selectedNodes.set(nodes);
         this._selectedEdges.set(edges);
@@ -111,25 +116,35 @@ export class ExternalAppService {
         break;
       }
       case 'flow:status-update': {
-        const event = message.payload as StatusUpdateEvent;
+        if (!message.payload || typeof message.payload !== 'object') break;
+        const raw = message.payload as Record<string, unknown>;
+        const allowedStatuses = new Set(['idle', 'loading', 'error', 'connected']);
+        if (!allowedStatuses.has(raw['status'] as string)) {
+          console.warn(`[SHELL][9] ExternalAppService: status-update rejected — unknown status: "${raw['status']}"`);
+          break;
+        }
+        const event = raw as unknown as StatusUpdateEvent;
         console.log(`[SHELL][9] ExternalAppService: status-update | status: "${event.status}" | msg: "${event.message ?? ''}"`);
         this._flowStatus.set(event);
         this.addLog('in', message.type, `Status: ${event.status}${event.message ? ' — ' + event.message : ''}`);
         break;
       }
       case 'flow:node-double-click': {
+        if (!message.payload || typeof message.payload !== 'object') break;
         const payload = message.payload as { nodeId?: string; nodeType?: string };
         console.log('[SHELL][9] ExternalAppService: node-double-click | payload:', payload);
         this.addLog('in', message.type, `Node double-clicked: ${payload?.nodeId ?? 'unknown'}`);
         break;
       }
       case 'flow:error': {
+        if (!message.payload || typeof message.payload !== 'object') break;
         const payload = message.payload as { code?: string; message?: string };
         console.error('[SHELL][9] ExternalAppService: error from external | payload:', payload);
         this.addLog('in', message.type, `Error: ${payload?.message ?? 'unknown'}`);
         break;
       }
       case 'message': {
+        if (!message.payload || typeof message.payload !== 'object') break;
         const payload = message.payload as { text?: string };
         console.log('[SHELL][9] ExternalAppService: message from external | text:', payload?.text);
         this.addLog('in', message.type, payload?.text ?? '(empty)');

@@ -103,9 +103,9 @@ export class ElectronIpcService implements OnDestroy {
     }
   }
 
-  async setExternalBounds(bounds: { x: number; y: number; width: number; height: number }): Promise<void> {
+  setExternalBounds(bounds: { x: number; y: number; width: number; height: number }): void {
     if (!this.isElectron) return;
-    await this.api.external.setBounds(bounds);
+    this.api.external.setBounds(bounds);
   }
 
   reloadExternal(): void {

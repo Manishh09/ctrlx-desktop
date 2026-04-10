@@ -1,10 +1,12 @@
-import { ipcMain, dialog } from 'electron';
+import { ipcMain, dialog, app } from 'electron';
 import { IPC_CHANNELS } from '../../shared/ipc-channels';
 import { FileService } from '../services/file.service';
 import { ConfigService } from '../services/config.service';
 import type { FileOperation, FileWriteOperation } from '../../shared/models';
 
-const fileService = new FileService();
+// Restrict file I/O to the user's home directory and app data folder.
+// This prevents the renderer from reading or writing arbitrary system paths.
+const fileService = new FileService([app.getPath('home'), app.getPath('userData')]);
 const configService = new ConfigService();
 
 export function registerIpcHandlers(): void {

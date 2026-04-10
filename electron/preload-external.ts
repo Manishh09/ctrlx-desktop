@@ -90,11 +90,12 @@ export type CtrlxBridge = typeof ctrlxBridge;
 // ──────────────────────────────────────────────────────────────────────────
 // DEMO: Auto-simulate external app lifecycle & bidirectional data events
 //
-// This block auto-notifies readiness and sends periodic demo messages back
-// to the Angular shell, simulating what ctrlX FLOW would emit in production.
+// This block only runs in development (CTRLX_IS_DEV=1 is set by main.ts).
+// It is a no-op in the packaged production app.
 // ──────────────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-  console.log('[EXTERNAL][3] preload-external: DOMContentLoaded → scheduling notifyReady in 800 ms');
+if (process.env['CTRLX_IS_DEV'] === '1') {
+  window.addEventListener('DOMContentLoaded', () => {
+    console.log('[EXTERNAL][3] preload-external: DOMContentLoaded → scheduling notifyReady in 800 ms');
 
   // Step 1: Notify host we are ready (with a slight delay so the page settles)
   setTimeout(() => {
@@ -116,8 +117,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
   }, 800);
 
-  // Listen for commands sent from Angular and log them clearly
-  ctrlxBridge.onMessageFromHost((message) => {
-    console.log(`[EXTERNAL][5] preload-external: ⬇ Received data from HOST in external app | type: "${message.type}" | payload:`, message.payload);
+    // Listen for commands sent from Angular and log them clearly
+    ctrlxBridge.onMessageFromHost((message) => {
+      console.log(`[EXTERNAL][5] preload-external: ⬇ Received data from HOST in external app | type: "${message.type}" | payload:`, message.payload);
+    });
   });
-});
+} // end IS_DEV guard

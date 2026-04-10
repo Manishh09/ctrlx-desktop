@@ -15,8 +15,10 @@ export function setupPermissions(session: Session): void {
     }
   });
 
+  // Allowlist — anything NOT explicitly listed is denied, regardless of future
+  // Chromium/Electron additions.
   session.setPermissionCheckHandler((_webContents, permission) => {
-    const denied = ['media', 'geolocation', 'notifications', 'midi', 'pointerLock'];
-    return !denied.includes(permission);
+    const allowed = ['clipboard-read', 'clipboard-sanitized-write'];
+    return allowed.includes(permission);
   });
 }

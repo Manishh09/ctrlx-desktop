@@ -17,13 +17,18 @@ import type { ExternalAppBounds } from '../shared/models';
 // App Configuration
 // ──────────────────────────────────────────
 const IS_DEV = !app.isPackaged;
+
+// Expose dev flag to renderer/preload processes before any window is created.
+// preload-external.ts reads this to gate the demo simulation block.
+process.env['CTRLX_IS_DEV'] = IS_DEV ? '1' : '0';
 const ANGULAR_DEV_URL = 'http://localhost:4200';
 const ANGULAR_PROD_PATH = path.join(__dirname, '../../../angular/dist/ctrlx-angular/browser/index.html');
 
 // Enable GPU acceleration for WebGL content
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
+// NOTE: 'ignore-gpu-blocklist' was removed — the blocklist protects against
+// known driver bugs that can cause TDR faults on industrial hardware.
 
 // ──────────────────────────────────────────
 // Window & View References
@@ -39,7 +44,7 @@ function createMainWindow(): void {
     height: 1000,
     minWidth: 1024,
     minHeight: 768,
-    title: 'ctrlX Desktop',
+    title: 'ctrlX Flow Engineering',
     show: false,
   });
 
@@ -110,7 +115,7 @@ function setupExternalViewIPC(): void {
     return externalViewService.loadUrl(url);
   });
 
-  ipcMain.handle(IPC_CHANNELS.EXTERNAL.SET_BOUNDS, async (_event, bounds: ExternalAppBounds) => {
+  ipcMain.on(IPC_CHANNELS.EXTERNAL.SET_BOUNDS, (_event, bounds: ExternalAppBounds) => {
     if (!externalViewService) return;
     const sanitized: ExternalAppBounds = {
       x: Math.round(Math.max(0, bounds.x)),
@@ -168,13 +173,22 @@ function setupWindowIPC(): void {
 // App Lifecycle
 // ──────────────────────────────────────────
 app.whenReady().then(() => {
+  // Apply security policy to the default (Angular shell) session.
   setupPermissions(session.defaultSession);
-  setupCSP(session.defaultSession);
+  setupCSP(session.defaultSession, IS_DEV);
+
+  // Apply permission restrictions to the external-app session too.
+  // We deliberately do NOT override CSP for the external session —
+  // the external app (ctrlX FLOW) serves its own CSP from its server.
+  setupPermissions(session.fromPartition('persist:ctrlx-external'));
 
   registerIpcHandlers();
+  // Must be set up before creating the window, so handlers are ready when Angular loads and tries to communicate.
   setupExternalViewIPC();
+  // Window controls can be set up after window creation, but we do it here for consistency and to ensure handlers are registered before Angular tries to use them.
   setupWindowIPC();
 
+  // Create the main window after IPC handlers are set up
   createMainWindow();
 
   app.on('activate', () => {

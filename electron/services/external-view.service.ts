@@ -1,5 +1,7 @@
 import {
+  app,
   BaseWindow,
+  IpcMainEvent,
   WebContentsView,
   ipcMain,
 } from 'electron';
@@ -23,6 +25,39 @@ export class ExternalViewService {
    */
   private messageQueue: BridgeMessage[] = [];
   private isExternalReady = false;
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Named listener references — stored so they can be removed in destroy() and
+  // prevent listener accumulation when the service is re-created (e.g. macOS
+  // window re-activation via app.on('activate')).
+  // ──────────────────────────────────────────────────────────────────────────
+
+  private readonly onBridgeToShell = (event: IpcMainEvent, message: BridgeMessage): void => {
+    if (event.sender !== this.externalView?.webContents) {
+      console.warn('[MAIN] ExternalViewService: Rejected bridge message from unknown sender');
+      return;
+    }
+    console.log(`[MAIN][6] ExternalViewService: received from EXTERNAL → forwarding to shell | type: "${message.type}" | source: ${message.source}`);
+    if (!this.shellView.webContents.isDestroyed()) {
+      this.shellView.webContents.send(IPC_CHANNELS.BRIDGE.FROM_EXTERNAL, message);
+    }
+  };
+
+  private readonly onReadyAck = (event: IpcMainEvent): void => {
+    if (event.sender !== this.externalView?.webContents) return;
+    console.log('[MAIN][3] ExternalViewService: EXTERNAL_READY_ACK received → marking ready + flushing queue');
+    this.isExternalReady = true;
+    this.flushMessageQueue();
+  };
+
+  private readonly onExternalReady = (event: IpcMainEvent): void => {
+    if (event.sender === this.externalView?.webContents) {
+      console.log('[MAIN][3] ExternalViewService: READY signal from external app → forwarding to shell');
+      if (!this.shellView.webContents.isDestroyed()) {
+        this.shellView.webContents.send(IPC_CHANNELS.EXTERNAL.READY);
+      }
+    }
+  };
 
   constructor(
     private window: BaseWindow,
@@ -111,22 +146,24 @@ export class ExternalViewService {
           this.shellView.webContents.send(IPC_CHANNELS.EXTERNAL.READY);
         }
 
-        // ── Diagnostic: verify ctrlxBridge was exposed by the preload ──
-        this.externalView?.webContents.executeJavaScript('typeof window.ctrlxBridge')
-          .then((result: string) => {
-            if (result === 'object') {
-              console.log('[MAIN][DIAG] ✅ window.ctrlxBridge is EXPOSED — preload loaded correctly');
-            } else {
-              console.error(
-                `[MAIN][DIAG] ❌ window.ctrlxBridge is "${result}" in external renderer.`,
-                '\n  Possible causes:',
-                '\n  1. Preload JS not compiled (run: npm run electron:compile)',
-                '\n  2. Preload path mismatch (check log above)',
-                '\n  3. contextBridge.exposeInMainWorld() threw an error in the preload',
-              );
-            }
-          })
-          .catch((err: Error) => console.error('[MAIN][DIAG] executeJavaScript failed:', err));
+        // ── Diagnostic: verify ctrlxBridge was exposed by the preload (dev only) ──
+        if (!app.isPackaged) {
+          this.externalView?.webContents.executeJavaScript('typeof window.ctrlxBridge')
+            .then((result: string) => {
+              if (result === 'object') {
+                console.log('[MAIN][DIAG] ✅ window.ctrlxBridge is EXPOSED — preload loaded correctly');
+              } else {
+                console.error(
+                  `[MAIN][DIAG] ❌ window.ctrlxBridge is "${result}" in external renderer.`,
+                  '\n  Possible causes:',
+                  '\n  1. Preload JS not compiled (run: npm run electron:compile)',
+                  '\n  2. Preload path mismatch (check log above)',
+                  '\n  3. contextBridge.exposeInMainWorld() threw an error in the preload',
+                );
+              }
+            })
+            .catch((err: Error) => console.error('[MAIN][DIAG] executeJavaScript failed:', err));
+        }
       });
 
       this.currentUrl = url;
@@ -189,35 +226,11 @@ export class ExternalViewService {
   }
 
   private setupBridgeFromExternal(): void {
-    // ── Inbound: external → shell (events & replies) ──────────────────
-    ipcMain.on(IPC_CHANNELS.BRIDGE.TO_SHELL, (_event, message: BridgeMessage) => {
-      if (_event.sender !== this.externalView?.webContents) {
-        console.warn('[MAIN] ExternalViewService: Rejected bridge message from unknown sender');
-        return;
-      }
-      console.log(`[MAIN][6] ExternalViewService: received from EXTERNAL → forwarding to shell | type: "${message.type}" | source: ${message.source}`);
-      if (!this.shellView.webContents.isDestroyed()) {
-        this.shellView.webContents.send(IPC_CHANNELS.BRIDGE.FROM_EXTERNAL, message);
-      }
-    });
-
-    // ── External signals it is alive and ready to receive messages ────
-    ipcMain.on(IPC_CHANNELS.BRIDGE.EXTERNAL_READY_ACK, (_event) => {
-      if (_event.sender !== this.externalView?.webContents) return;
-      console.log('[MAIN][3] ExternalViewService: EXTERNAL_READY_ACK received → marking ready + flushing queue');
-      this.isExternalReady = true;
-      this.flushMessageQueue();
-    });
-
-    // ── Cooperative ready signal (ctrlxBridge.notifyReady()) ──────────
-    ipcMain.on(IPC_CHANNELS.EXTERNAL.READY, (_event) => {
-      if (_event.sender === this.externalView?.webContents) {
-        console.log('[MAIN][3] ExternalViewService: READY signal from external app → forwarding to shell');
-        if (!this.shellView.webContents.isDestroyed()) {
-          this.shellView.webContents.send(IPC_CHANNELS.EXTERNAL.READY);
-        }
-      }
-    });
+    // Register stored handler references so they can be cleanly removed
+    // in destroy() without accumulating duplicate listeners.
+    ipcMain.on(IPC_CHANNELS.BRIDGE.TO_SHELL, this.onBridgeToShell);
+    ipcMain.on(IPC_CHANNELS.BRIDGE.EXTERNAL_READY_ACK, this.onReadyAck);
+    ipcMain.on(IPC_CHANNELS.EXTERNAL.READY, this.onExternalReady);
   }
 
   reload(): void {
@@ -231,6 +244,11 @@ export class ExternalViewService {
   }
 
   destroy(): void {
+    // Remove all IPC listeners registered by this instance to prevent
+    // accumulation when the service is destroyed and re-created.
+    ipcMain.removeListener(IPC_CHANNELS.BRIDGE.TO_SHELL, this.onBridgeToShell);
+    ipcMain.removeListener(IPC_CHANNELS.BRIDGE.EXTERNAL_READY_ACK, this.onReadyAck);
+    ipcMain.removeListener(IPC_CHANNELS.EXTERNAL.READY, this.onExternalReady);
     this.detach();
     if (this.externalView && !this.externalView.webContents.isDestroyed()) {
       this.externalView.webContents.close();

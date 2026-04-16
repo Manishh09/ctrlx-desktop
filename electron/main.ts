@@ -180,7 +180,18 @@ app.whenReady().then(() => {
   // Apply permission restrictions to the external-app session too.
   // We deliberately do NOT override CSP for the external session —
   // the external app (ctrlX FLOW) serves its own CSP from its server.
-  setupPermissions(session.fromPartition('persist:ctrlx-external'));
+  const externalSession = session.fromPartition('persist:ctrlx-external');
+  setupPermissions(externalSession);
+
+  // Allow self-signed / device-issued certificates for the external session.
+  // ctrlX CORE devices use HTTPS with certificates that are not in the OS
+  // trust store, so Electron's default verifier rejects them.  We bypass
+  // verification only for this isolated session — the shell session retains
+  // the default strict verifier.
+  externalSession.setCertificateVerifyProc((_request, callback) => {
+    // 0 = success (trust the certificate)
+    callback(0);
+  });
 
   registerIpcHandlers();
   // Must be set up before creating the window, so handlers are ready when Angular loads and tries to communicate.

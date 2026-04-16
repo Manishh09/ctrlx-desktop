@@ -1,4 +1,4 @@
-import { Component, inject, output } from '@angular/core';
+import { Component, inject, output, signal } from '@angular/core';
 import { ExternalAppService } from '../../core/services/external-app.service';
 import { ElectronIpcService } from '../../core/services/electron-ipc.service';
 import { TitleCasePipe } from '@angular/common';
@@ -47,6 +47,25 @@ import { TitleCasePipe } from '@angular/common';
           @if (loadError()) {
             <div class="error-row">
               {{ loadError() }}
+            </div>
+          }
+          @if (externalStatus() === 'ready' || externalStatus() === 'loading') {
+            <div class="ext-actions">
+              <button class="action-btn disconnect-btn" (click)="disconnect()">Disconnect</button>
+            </div>
+          }
+          @if (externalStatus() === 'ready') {
+            <div class="reconnect-row">
+              <input
+                class="reconnect-input"
+                [value]="reconnectUrl()"
+                (input)="reconnectUrl.set(asInputValue($event))"
+                (keydown.enter)="reconnect()"
+                placeholder="New URL…"
+                spellcheck="false"
+                autocomplete="off"
+              />
+              <button class="action-btn" (click)="reconnect()">Go</button>
             </div>
           }
         </div>
@@ -206,6 +225,60 @@ import { TitleCasePipe } from '@angular/common';
       word-break: break-word;
     }
 
+    .ext-actions {
+      margin-top: 8px;
+    }
+
+    .action-btn {
+      padding: 5px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 11px;
+      white-space: nowrap;
+      transition: all 150ms;
+    }
+    .action-btn:hover {
+      background: var(--accent-color);
+      color: #fff;
+      border-color: var(--accent-color);
+    }
+    .disconnect-btn {
+      width: 100%;
+      color: var(--status-error);
+      border-color: var(--status-error);
+    }
+    .disconnect-btn:hover {
+      background: var(--status-error);
+      border-color: var(--status-error);
+      color: #fff;
+    }
+
+    .reconnect-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .reconnect-input {
+      flex: 1;
+      padding: 5px 8px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 11px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      outline: none;
+      min-width: 0;
+      transition: border-color 150ms;
+    }
+    .reconnect-input:focus {
+      border-color: var(--accent-color);
+    }
+
     .theme-buttons {
       display: flex;
       gap: 8px;
@@ -321,6 +394,22 @@ export class RightSidebarComponent {
   externalStatus = this.ipc.externalAppStatus;
   externalUrl = this.ipc.externalAppUrl;
   loadError = this.ipc.externalLoadError;
+  reconnectUrl = signal('');
+
+  disconnect(): void {
+    this.ipc.destroyExternal();
+  }
+
+  reconnect(): void {
+    const url = this.reconnectUrl().trim();
+    if (!url) return;
+    this.ipc.loadExternalApp(url).catch(() => {});
+    this.reconnectUrl.set('');
+  }
+
+  asInputValue(event: Event): string {
+    return (event.target as HTMLInputElement).value;
+  }
 
   setTheme(theme: 'light' | 'dark'): void {
     this.externalApp.setTheme(theme);
